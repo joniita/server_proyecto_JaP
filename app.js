@@ -74,6 +74,22 @@ app.get('/cart', authenticateToken, (req, res) => {
     res.json({ message: 'Ruta protegida', user: req.user });
 }); 
 
+app.post('/cart', authenticateToken, (req, res) => {
+    // La ruta /cart ahora está protegida y puedes acceder al usuario autenticado mediante req.user
+    let {username} = req.user;
+    let id = req.body.id;
+    let name = req.body.name;
+    let count = req.body.count;
+    let unitCost = req.body.unitCost;
+    let currency = req.body.currency;
+    let image = req.body.image;
+    
+
+
+    //res.json(name)
+    //res.json({ message: 'Ruta protegida', user: req.user });
+}); 
+
 app.get('/cats', (req, res) => {
     res.send(categories);
 });
