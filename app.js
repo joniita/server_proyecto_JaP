@@ -2,12 +2,14 @@ const express = require('express');
 const app = express();
 const port = 3000;
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
 app.use(express.json());
 
 const cart = require('./emercado-api/cart/buy.json');
 const categories = require('./emercado-api/cats/cat.json');
 const sell = require('./emercado-api/sell/publish.json');
 const userCart = require('./emercado-api/user_cart/25801.json');
+const archivoCarrito = "carrito.json"
 
 app.use(express.urlencoded({extended:false})); // Necesario para enviar datos por urlencode en postman
 
@@ -61,6 +63,32 @@ const authenticateToken = (req, res, next) => {
 };
 
 
+// funcion para guardar datos
+
+function guardarDatos(datos) {
+    // Lee el contenido actual del archivo, si existe
+  let contenidoExistente = {};
+  try {
+    contenidoExistente = JSON.parse(fs.readFileSync(archivoCarrito, 'utf-8'));
+  } catch (error) {
+    // Si el archivo no existe o no se puede leer, se inicializa como un objeto vacío
+  }
+
+  // Verifica si ya hay datos para este usuario
+  if (contenidoExistente[datos.user]) {
+    // Si ya hay datos, agrega el nuevo artículo al array articles
+    contenidoExistente[datos.user].articles.push(...datos.articles);
+  } else {
+    // Si no hay datos para este usuario, simplemente asigna los datos al usuario
+    contenidoExistente[datos.user] = datos;
+    
+  }
+
+  // Escribe el contenido actualizado en el archivo
+  fs.writeFileSync(archivoCarrito, JSON.stringify(contenidoExistente, null, 2), 'utf-8');
+}
+
+
 
 
 // rutas
@@ -84,10 +112,27 @@ app.post('/cart', authenticateToken, (req, res) => {
     let currency = req.body.currency;
     let image = req.body.image;
     
+    // Crear el objeto que representa un artículo
+  const nuevoArticulo = {
+    id,
+    name,
+    count,
+    unitCost,
+    currency,
+    image,
+  };
 
+  // Datos a guardar en el archivo
+  const datos = {
+    user: username,
+    articles: [nuevoArticulo], // Se inicializa con el nuevo artículo
+  };
 
-    res.json(name)
-    //res.json({ message: 'Ruta protegida', user: req.user });
+  // Guardar datos en un archivo JSON
+  guardarDatos(datos);
+
+  res.json({ mensaje: 'Datos del carrito guardados exitosamente' });
+
 }); 
 
 app.get('/cats', (req, res) => {
