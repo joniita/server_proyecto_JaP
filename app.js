@@ -86,7 +86,7 @@ app.post('/cart', authenticateToken, (req, res) => {
     
 
 
-    //res.json(name)
+    res.json(name)
     //res.json({ message: 'Ruta protegida', user: req.user });
 }); 
 
