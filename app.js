@@ -3,15 +3,17 @@ const app = express();
 const port = 3000;
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
-app.use(express.json());
+const bodyParser = require('body-parser');
 
+app.use(express.json());
+app.use(bodyParser.json());
 const cart = require('./emercado-api/cart/buy.json');
 const categories = require('./emercado-api/cats/cat.json');
 const sell = require('./emercado-api/sell/publish.json');
 const userCart = require('./emercado-api/user_cart/25801.json');
 const archivoCarrito = "carrito.json"
 
-app.use(express.urlencoded({extended:false})); // Necesario para enviar datos por urlencode en postman
+app.use(express.urlencoded({ extended: false })); // Necesario para enviar datos por urlencode en postman
 
 const cors = require('cors');
 app.use(cors({
@@ -22,9 +24,11 @@ app.use(cors({
 // Creacion de token
 
 const hardcodedUser = {
-    username: 'usuario',
+    username: 'usuario@gmail.com',
     password: 'contraseña'
 };
+
+const secretKey = 'tu_clave_secreta';
 
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
@@ -32,7 +36,7 @@ app.post('/login', (req, res) => {
     // Autenticación (en un entorno de producción, consulta una base de datos)
     if (username === hardcodedUser.username && password === hardcodedUser.password) {
         // Generar token con jwt.sign
-        const token = jwt.sign({ username }, 'tu_secreto_secreto', { expiresIn: '1h' });
+        const token = jwt.sign({ username }, secretKey, { expiresIn: '1h' });
 
         res.json({ token });
     } else {
@@ -42,24 +46,33 @@ app.post('/login', (req, res) => {
 
 
 
-// funcion para usar la autenticación // Middleware 
+// Clave secreta para firmar y verificar tokens (se recomienda almacenar esto de forma segura)
+
+
+// Middleware para verificar el token en las rutas protegidas
 const authenticateToken = (req, res, next) => {
-    const token = req.headers.authorization;
+    // Obtener el token de la cabecera de autorización
+    const auth = req.get('authorization');
+    let token = null
+
+    if (auth && auth.toLowerCase().startsWith('bearer')) {
+        token = auth.substring(7);
+    }
+
+    let decodeToken = jwt.verify(token, secretKey, (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Token no válido' });
+        }
+
+        // Guardar el usuario en la solicitud para su uso posterior
+        req.user = user;
+
+        next(); // Continuar con la siguiente función de middleware
+    });
 
     if (!token) {
         return res.status(401).json({ error: 'Token no proporcionado' });
     }
-
-    jwt.verify(token, 'tu_secreto_secreto', (err, decoded) => {
-        if (err) {
-            return res.status(401).json({ error: 'Token inválido' });
-        }
-
-        // Almacenar el usuario en la solicitud para su uso posterior
-        req.user = decoded;
-
-        next();
-    });
 };
 
 
@@ -67,25 +80,25 @@ const authenticateToken = (req, res, next) => {
 
 function guardarDatos(datos) {
     // Lee el contenido actual del archivo, si existe
-  let contenidoExistente = {};
-  try {
-    contenidoExistente = JSON.parse(fs.readFileSync(archivoCarrito, 'utf-8'));
-  } catch (error) {
-    // Si el archivo no existe o no se puede leer, se inicializa como un objeto vacío
-  }
+    let contenidoExistente = {};
+    try {
+        contenidoExistente = JSON.parse(fs.readFileSync(archivoCarrito, 'utf-8'));
+    } catch (error) {
+        // Si el archivo no existe o no se puede leer, se inicializa como un objeto vacío
+    }
 
-  // Verifica si ya hay datos para este usuario
-  if (contenidoExistente[datos.user]) {
-    // Si ya hay datos, agrega el nuevo artículo al array articles
-    contenidoExistente[datos.user].articles.push(...datos.articles);
-  } else {
-    // Si no hay datos para este usuario, simplemente asigna los datos al usuario
-    contenidoExistente[datos.user] = datos;
-    
-  }
+    // Verifica si ya hay datos para este usuario
+    if (contenidoExistente[datos.user]) {
+        // Si ya hay datos, agrega el nuevo artículo al array articles
+        contenidoExistente[datos.user].articles.push(...datos.articles);
+    } else {
+        // Si no hay datos para este usuario, simplemente asigna los datos al usuario
+        contenidoExistente[datos.user] = datos;
 
-  // Escribe el contenido actualizado en el archivo
-  fs.writeFileSync(archivoCarrito, JSON.stringify(contenidoExistente, null, 2), 'utf-8');
+    }
+
+    // Escribe el contenido actualizado en el archivo
+    fs.writeFileSync(archivoCarrito, JSON.stringify(contenidoExistente, null, 2), 'utf-8');
 }
 
 
@@ -100,40 +113,28 @@ app.get('/', (req, res) => {
 app.get('/cart', authenticateToken, (req, res) => {
     // La ruta /cart ahora está protegida y puedes acceder al usuario autenticado mediante req.user
     res.json({ message: 'Ruta protegida', user: req.user });
-}); 
+});
 
 app.post('/cart', authenticateToken, (req, res) => {
     // La ruta /cart ahora está protegida y puedes acceder al usuario autenticado mediante req.user
     let {username} = req.user;
-    let id = req.body.id;
-    let name = req.body.name;
-    let count = req.body.count;
-    let unitCost = req.body.unitCost;
-    let currency = req.body.currency;
-    let image = req.body.image;
-    
-    // Crear el objeto que representa un artículo
-  const nuevoArticulo = {
-    id,
-    name,
-    count,
-    unitCost,
-    currency,
-    image,
-  };
+    const userInfo = req.user;
+    let articles = req.body
 
-  // Datos a guardar en el archivo
-  const datos = {
-    user: username,
-    articles: [nuevoArticulo], // Se inicializa con el nuevo artículo
-  };
+  
+    // Datos a guardar en el archivo
+      const datos = {
+        user: username,
+        articles: [articles], // Se inicializa con el nuevo artículo
+      };
 
-  // Guardar datos en un archivo JSON
-  guardarDatos(datos);
+    // Guardar datos en un archivo JSON
+    guardarDatos(datos);
 
-  res.json({ mensaje: 'Datos del carrito guardados exitosamente' });
+    res.json({ mensaje: 'Este es un recurso protegido', usuario: userInfo });
 
-}); 
+
+});
 
 app.get('/cats', (req, res) => {
     res.send(categories);
@@ -142,33 +143,33 @@ app.get('/cats', (req, res) => {
 app.get('/cats/:id', (req, res) => {
     let idProduct = req.params.id
     let categorias = categories.find(categoria => categoria.id == idProduct) //
-    
+
     if (categorias) {
-      res.send(categorias);
-  } else {
-      res.status(404).send({ message: "No se encuentra la categoría" });
-  }
+        res.send(categorias);
+    } else {
+        res.status(404).send({ message: "No se encuentra la categoría" });
+    }
 });
 
 
 app.get('/cats_products/:id.:json', (req, res) => {
     let idCat = req.params.id
-    let cat_product = require(`./emercado-api/cats_products/${idCat}.json`) 
-    
+    let cat_product = require(`./emercado-api/cats_products/${idCat}.json`)
+
     res.send(cat_product);
 });
 
 app.get('/products/:id.:json', (req, res) => {
     let idProd = req.params.id
-    let name_product = require(`./emercado-api/products/${idProd}.json`) 
-    
+    let name_product = require(`./emercado-api/products/${idProd}.json`)
+
     res.send(name_product);
 });
 
 app.get('/products_comments/:id.:json', (req, res) => {
     let idCom = req.params.id
-    let comment = require(`./emercado-api/products_comments/${idCom}.json`) 
-    
+    let comment = require(`./emercado-api/products_comments/${idCom}.json`)
+
     res.send(comment);
 });
 
